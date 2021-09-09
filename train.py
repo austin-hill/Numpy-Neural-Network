@@ -13,10 +13,10 @@ train_images = [image.reshape(-1, 1)/255 for image in mnist.train_images()]
 
 # Prepare datasets
 training_data = list(zip(train_images[:50000], train_labels[:50000]))
-validation_data = list(zip(train_images[50000:], mnist_train_labels[50000:]))
+validation_data = (np.asarray([im.ravel() for im in train_images[50000:]]), mnist_train_labels[50000:])
 
 # Initialise network structure
-net = nn.Network([nn.Linear([784, 100]), nn.Sigmoid(), nn.Linear([100, 10]), nn.Sigmoid()])
+net = nn.Network([nn.Linear([784, 500]), nn.ReLU(), nn.Dropout(p=0.3), nn.Linear([500, 10]), nn.ReLU()])
 
 # Train network
-progress = net.sgd(training_data, 30, 5, 0.5, 0.1, validation_data=validation_data)
+progress = net.sgd(training_data, 30, 5, 0.05, validation_data=validation_data) 

@@ -7,7 +7,7 @@ class Network(object):
         self.layers = layers
     
     # Stochastic Gradient Descent
-    def sgd(self, training_set, epochs, m, eta, reg, validation_data):
+    def sgd(self, training_set, epochs, m, eta, reg=0, validation_data=False):
         n = len(training_set)
         progress = np.zeros(epochs, dtype=int)
 
@@ -18,7 +18,7 @@ class Network(object):
                 self.update_batch(mini_batch, eta, reg, n)
             if validation_data:
                 progress[j] = self.evaluate(validation_data)
-                print('Epoch {}: {}/{}'.format(j+1, progress[j], len(validation_data)))
+                print('Epoch {}: {}/{}'.format(j+1, progress[j], len(validation_data[0])))
             else:
                 print('Epoch {} complete'.format(j+1))
 
@@ -43,11 +43,11 @@ class Network(object):
     
     def forward(self, a):
         for layer in self.layers:
-            a = layer.forward(a)
+            a = layer.forward_batch(a, len(a), test=True)
         return a
     
     def evaluate(self, validation_data):
-        test_results = [(np.argmax(self.forward(t[0])), t[1]) for t in validation_data]
+        test_results = [(np.argmax(t[0]), t[1]) for t in zip(self.forward(validation_data[0]), validation_data[1])]
         return sum(int(x==y) for (x, y) in test_results)
 
 class Linear(object):
@@ -56,10 +56,7 @@ class Linear(object):
         self.biases = np.random.randn(size[1], 1)
         self.weights = np.random.randn(size[1], size[0])/np.sqrt(size[0])
     
-    def forward(self, a):
-        return np.dot(self.weights, a)+self.biases
-    
-    def forward_batch(self, a, m):
+    def forward_batch(self, a, m, test=False):
         self.last_input = a
         self.last_z = a @ self.weights.T + np.squeeze(np.array([self.biases for _ in range(m)]), axis=2)
         return self.last_z
@@ -76,24 +73,47 @@ class Linear(object):
         self.biases -= (eta/m)*self.last_nb
         self.weights = (1-eta*reg/n)*self.weights-(eta/m)*self.last_nw
 
-
-class Sigmoid(object):
-    '''Sigmoid loss function'''
-    def forward(self, z):
-        return self.sigmoid(z)
-    
-    def forward_batch(self, z, _):
-        self.last_z = z
-        return self.sigmoid(self.last_z)
-    
-    def backprop(self, delta):
-        return delta * self.sigmoid_prime(self.last_z)
-    
+class Activation(object):
+    '''Activation parent class'''
     def update_weights(self, eta, reg, m, n):
         pass
 
-    def sigmoid(self, z):
+    def forward_batch(self, z, m, test=False):
+        self.last_z = z
+        return self.activation(self.last_z)
+    
+    def backprop(self, delta):
+        return delta * self.activation_prime(self.last_z)
+
+
+class Sigmoid(Activation):
+    '''Sigmoid activation function'''
+    def activation(self, z):
         return 1.0/(1.0+np.exp(-z))
 
-    def sigmoid_prime(self, z):
-        return self.sigmoid(z)*(1-self.sigmoid(z))
+    def activation_prime(self, z):
+        return self.activation(z)*(1-self.activation(z))
+
+class ReLU(Activation):
+    '''ReLU activation function'''
+    def activation(self, z):
+        return z*(z > 0)
+
+    def activation_prime(self, z):
+        return 1.0*(z > 0)
+
+class Dropout(object):
+    '''Dropout layer'''
+    def __init__(self, p=0.5):
+        self.p_keep = 1 - p
+    
+    def forward_batch(self, z, m, test=False):
+        if test==True:
+            return z
+        return z * (np.random.rand(*z.shape) < self.p_keep) / self.p_keep
+
+    def backprop(self, delta):
+        return delta
+    
+    def update_weights(self, eta, reg, m, n):
+        pass
